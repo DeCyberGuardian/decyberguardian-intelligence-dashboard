@@ -1,6 +1,7 @@
 import streamlit as st
 import feedparser
 from urllib.parse import quote
+from html import unescape
 
 # -----------------------------
 # App Configuration
@@ -12,21 +13,13 @@ st.set_page_config(
 )
 
 # -----------------------------
-# Custom CSS (Dark Mode + Teal & Gold)
+# Custom CSS
 # -----------------------------
 st.markdown("""
 <style>
-body {
-    background-color: #0e1117;
-    color: #eaeaea;
-}
-h1, h2, h3 {
-    color: #008080;
-}
-a {
-    color: #FFD700;
-    text-decoration: none;
-}
+body { background-color: #0e1117; color: #eaeaea; }
+h1, h2, h3 { color: #008080; }
+a { color: #FFD700; text-decoration: none; }
 .stButton>button {
     background-color: #008080;
     color: white;
@@ -39,9 +32,7 @@ a {
     margin-bottom: 12px;
     border-left: 4px solid #FFD700;
 }
-small {
-    color: #9da5b4;
-}
+small { color: #9da5b4; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,27 +48,35 @@ RSS_FEEDS = {
 }
 
 # -----------------------------
-# Helper Functions
+# Data Layer
 # -----------------------------
+@st.cache_data(ttl=900)  # refresh every 15 minutes
 def fetch_feeds():
     articles = []
+
     for source, url in RSS_FEEDS.items():
-        feed = feedparser.parse(url)
-        for entry in feed.entries:
-            articles.append({
-                "source": source,
-                "title": entry.title,
-                "link": entry.link,
-                "summary": entry.get("summary", ""),
-                "published": entry.get("published", "N/A")
-            })
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                articles.append({
+                    "source": source,
+                    "title": unescape(entry.get("title", "No title")),
+                    "link": entry.get("link", ""),
+                    "summary": unescape(entry.get("summary", "")),
+                    "published": entry.get("published", "N/A")
+                })
+        except Exception:
+            continue
+
     return articles
 
-
+# -----------------------------
+# Utility Functions
+# -----------------------------
 def generate_tiktok_script(title, summary):
     return f"""
 Hook (0–5s):
-“Blue teamers, this just dropped…”
+Blue teamers, this just dropped.
 
 Context (5–20s):
 {title}
@@ -86,7 +85,7 @@ Key Insight (20–45s):
 {summary[:300]}...
 
 Why It Matters (45–55s):
-This impacts defenders, detection logic, and response playbooks.
+This impacts detection logic, incident response, and defensive posture.
 
 CTA (55–60s):
 Follow DeCyberGuardian for daily CTI insights.
@@ -96,13 +95,14 @@ Follow DeCyberGuardian for daily CTI insights.
 def social_share_links(title, link):
     text = quote(f"{title} | via DeCyberGuardian")
     url = quote(link)
+
     return {
         "x": f"https://twitter.com/intent/tweet?text={text}&url={url}",
         "linkedin": f"https://www.linkedin.com/sharing/share-offsite/?url={url}"
     }
 
 # -----------------------------
-# Sidebar Controls
+# Sidebar
 # -----------------------------
 st.sidebar.title("🛡️ DeCyberGuardian")
 st.sidebar.markdown("**Cyber Threat Intelligence Dashboard**")
@@ -126,7 +126,7 @@ st.markdown("Real-time cybersecurity intelligence for Blue Teams & CTI Analysts.
 
 articles = fetch_feeds()
 
-# Filtering Logic
+# Filtering
 if keyword_filter:
     articles = [
         a for a in articles
@@ -139,7 +139,7 @@ articles = [a for a in articles if a["source"] in selected_sources]
 # -----------------------------
 # Render Articles
 # -----------------------------
-for article in articles:
+for idx, article in enumerate(articles):
     share = social_share_links(article["title"], article["link"])
 
     st.markdown(f"""
@@ -158,7 +158,7 @@ for article in articles:
     with col2:
         st.markdown(f"[Share on LinkedIn]({share['linkedin']})")
     with col3:
-        if st.button("🎥 Generate TikTok Script", key=article["link"]):
+        if st.button("🎥 Generate TikTok Script", key=f"tiktok_{idx}"):
             st.text_area(
                 "TikTok Script",
                 generate_tiktok_script(article["title"], article["summary"]),
